@@ -1,15 +1,14 @@
-st.set_page_config(
-    page_title="FotoBudka — Dzień Otwarty",
-    page_icon="📸",
-    layout="centered"
-)
-
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
 import io
 import qrcode
 import base64
 
+st.set_page_config(
+    page_title="FotoBudka — Dzień Otwarty",
+    page_icon="📸",
+    layout="centered"
+)
 st.set_page_config(page_title="FotoBudka — Dzień Otwarty", layout="centered")
 
 st.title("FotoBudka — Dzień Otwarty")
