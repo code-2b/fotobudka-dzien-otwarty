@@ -88,14 +88,30 @@ st.title("FotoBudka — Dzień Otwarty")
 st.write("Zrób zdjęcie, wybierz ramkę i pobierz gotową pamiątkę.")
 
 # 1) Kamera
-img_file = st.camera_input("Zrób zdjęcie")
+img_file = st.camera_input("Zrób zdjęcie", key="photobooth_camera_input")
 photo_count, total_photo_count = _update_capture_counter(img_file)
 
 # 2) Ustawienia nakładki (działa nawet bez zdjęcia — uczeń może klikać)
-frame_style = st.selectbox("Styl ramki", ["Zielona (Eco)", "Niebieska (Tech)", "Fioletowa (Art)"])
-caption = st.text_input("Napis na zdjęciu", "Dołączam do ZS nr4 w Nowym Sączu")
-show_qr = st.checkbox("Dodaj QR (np. do strony szkoły)", value=True)
-qr_text = st.text_input("Tekst/URL do QR", "https://zsnr4.net")
+frame_style = st.selectbox(
+    "Styl ramki",
+    ["Zielona (Eco)", "Niebieska (Tech)", "Fioletowa (Art)"],
+    key="photobooth_frame_style",
+)
+caption = st.text_input(
+    "Napis na zdjęciu",
+    "Dołączam do ZS nr4 w Nowym Sączu",
+    key="photobooth_caption_text",
+)
+show_qr = st.checkbox(
+    "Dodaj QR (np. do strony szkoły)",
+    value=True,
+    key="photobooth_show_qr",
+)
+qr_text = st.text_input(
+    "Tekst/URL do QR",
+    "https://zsnr4.net",
+    key="photobooth_qr_text",
+)
 if total_photo_count is None:
     st.caption(f"Licznik zdjęć w tej sesji: {photo_count}")
 else:
@@ -308,192 +324,7 @@ else:
         data=buf.getvalue(),
         file_name="fotobudka_dzien_otwarty.jpg",
         mime="image/jpeg",
-    )
-
-st.caption("Tip: Kamera działa w przeglądarce — na telefonach wychodzi świetnie.")
-
-
-def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int) -> list[str]:
-    words = text.strip().split()
-    if not words:
-        return ["Dzień Otwarty!"]
-    lines: list[str] = []
-    current = words[0]
-    for word in words[1:]:
-        candidate = f"{current} {word}"
-        width, _ = _get_text_size(draw, candidate, font)
-        if width <= max_width:
-            current = candidate
-        else:
-            lines.append(current)
-            current = word
-    lines.append(current)
-    return lines
-
-
-def _ellipsize_to_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int) -> str:
-    base = text.strip()
-    if not base:
-        return "…"
-    out = base
-    while out:
-        width, _ = _get_text_size(draw, out + "…", font)
-        if width <= max_width:
-            return out + "…"
-        out = out[:-1]
-    return "…"
-
-
-def _load_font(size: int) -> ImageFont.ImageFont:
-    font_candidates = [
-        "data/DejaVuSans_ZS4.ttf",
-        "DejaVuSans.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-    ]
-    for path in font_candidates:
-        try:
-            return ImageFont.truetype(path, size=size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
-
-
-@st.cache_resource(show_spinner=False)
-def _load_school_logo() -> Image.Image | None:
-    if not LOGO_B64 or LOGO_B64.startswith("___WSTAW"):
-        return None
-
-    try:
-        logo_bytes = base64.b64decode(LOGO_B64.encode("ascii"))
-        logo = Image.open(io.BytesIO(logo_bytes)).convert("RGBA")
-        return logo
-    except Exception:
-        return None
-
-
-def _paste_logo_top_left(photo_rgba: Image.Image, thickness: int):
-    logo = _load_school_logo()
-    if logo is None:
-        return
-
-    w, h = photo_rgba.size
-    margin = max(10, thickness + 8)
-    target_w = max(120, min(int(w * 0.22), 280))
-
-    lw, lh = logo.size
-    if lw <= 0 or lh <= 0:
-        return
-    target_h = int(target_w * (lh / lw))
-    logo = logo.resize((target_w, target_h), Image.Resampling.LANCZOS)
-
-    # Delikatne białe tło pod logo dla czytelności.
-    bg_pad = 8
-    bg = Image.new("RGBA", (target_w + 2 * bg_pad, target_h + 2 * bg_pad), (255, 255, 255, 120))
-    photo_rgba.alpha_composite(bg, (margin - bg_pad, margin - bg_pad))
-    photo_rgba.alpha_composite(logo, (margin, margin))
-
-
-def _draw_caption_and_qr(photo: Image.Image, caption: str, qr_text: str | None):
-    w, h = photo.size
-    draw = ImageDraw.Draw(photo)
-
-    # Pasek na podpis (większy, aby nie ściskać liter i uniknąć nachodzenia).
-    bar_h = max(96, h // 6)
-    bar_y0 = h - bar_h
-    draw.rectangle([0, bar_y0, w, h], fill=(0, 0, 0))
-
-    # QR
-    qr_target = 0
-    qr_margin = 12
-    if qr_text:
-        qr = qrcode.QRCode(border=1, box_size=6)
-        qr.add_data(qr_text)
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-        qr_target = bar_h - 18
-        qr_img = qr_img.resize((qr_target, qr_target), Image.Resampling.NEAREST)
-        photo.paste(qr_img, (w - qr_target - qr_margin, bar_y0 + 9))
-
-    left_pad = 22
-    right_pad = 22 + (qr_target + qr_margin + 8 if qr_target else 0)
-    text_area_w = max(120, w - left_pad - right_pad)
-    text = caption.strip() if caption.strip() else "Dołączam do ZS nr4 w Nowym Sączu"
-
-    # Dopasowanie czcionki i łamanie do maksymalnie 2 linii.
-    font_size = max(22, h // 20)
-    min_font_size = 16
-    chosen_lines: list[str] = []
-    chosen_font: ImageFont.ImageFont = _load_font(font_size)
-
-    while font_size >= min_font_size:
-        font = _load_font(font_size)
-        lines = _wrap_text(draw, text, font, text_area_w)
-        if len(lines) > 2:
-            lines = [lines[0], " ".join(lines[1:])]
-            lines[1] = _ellipsize_to_width(draw, lines[1], font, text_area_w)
-
-        line_heights = [_get_text_size(draw, ln, font)[1] for ln in lines]
-        total_h = sum(line_heights) + (6 if len(lines) > 1 else 0)
-        if total_h <= bar_h - 20:
-            chosen_lines = lines
-            chosen_font = font
-            break
-        font_size -= 1
-
-    if not chosen_lines:
-        chosen_font = _load_font(min_font_size)
-        chosen_lines = _wrap_text(draw, text, chosen_font, text_area_w)
-        if len(chosen_lines) > 2:
-            chosen_lines = [chosen_lines[0], _ellipsize_to_width(draw, " ".join(chosen_lines[1:]), chosen_font, text_area_w)]
-
-    # Pionowe wyśrodkowanie linii w pasku.
-    line_heights = [_get_text_size(draw, ln, chosen_font)[1] for ln in chosen_lines]
-    total_h = sum(line_heights) + (6 if len(chosen_lines) > 1 else 0)
-    y = bar_y0 + (bar_h - total_h) // 2
-    for i, line in enumerate(chosen_lines):
-        draw.text((left_pad, y), line, fill=(255, 255, 255), font=chosen_font)
-        y += line_heights[i] + 6
-
-
-def add_overlay(photo: Image.Image, style: str, caption: str, qr_text: str | None):
-    photo = photo.convert("RGB")
-    w, h = photo.size
-    draw = ImageDraw.Draw(photo)
-
-    # Ramka
-    color = make_frame_color(style)
-    thickness = max(10, min(w, h) // 40)
-    for i in range(thickness):
-        draw.rectangle([i, i, w - 1 - i, h - 1 - i], outline=color)
-
-    # Logo szkoły: lewy górny róg
-    photo_rgba = photo.convert("RGBA")
-    _paste_logo_top_left(photo_rgba, thickness=thickness)
-    photo = photo_rgba.convert("RGB")
-
-    # Pasek podpisu + QR + czytelny napis
-    _draw_caption_and_qr(photo, caption=caption, qr_text=qr_text)
-    return photo
-
-if img_file is None:
-    st.info("Najpierw zrób zdjęcie kamerą powyżej.")
-else:
-    # 3) Przetwarzanie zdjęcia
-    original = Image.open(img_file)
-    final = add_overlay(original, frame_style, caption, qr_text if show_qr else None)
-
-    st.subheader("Podgląd")
-    st.image(final, use_container_width=True)
-
-    # 4) Pobieranie
-    buf = io.BytesIO()
-    final.save(buf, format="JPEG", quality=92)
-    st.download_button(
-        "Pobierz zdjęcie (JPG)",
-        data=buf.getvalue(),
-        file_name="fotobudka_dzien_otwarty.jpg",
-        mime="image/jpeg",
+        key="photobooth_download_jpg",
     )
 
 st.caption("Tip: Kamera działa w przeglądarce — na telefonach wychodzi świetnie.")
